@@ -10,14 +10,11 @@ WORKDIR /app
 COPY client/package.json ./ 
 COPY client/pnpm-lock.yaml ./ 
 
-# Installer les dépendances
-RUN pnpm install
-
 # Copier le reste du projet client
 COPY client/ .
 
 # Exposer le port utilisé par Vite
-EXPOSE 5173
+EXPOSE 8080
 
 # Lancer le serveur de dev
 CMD ["npm", "run", "dev"]

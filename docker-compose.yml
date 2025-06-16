@@ -1,10 +1,12 @@
+version: "3.8"
+
 services:
   client:
     build:
       context: .
       dockerfile: client/Dockerfile
     ports:
-      - "5173:5173"
+      - "8080:8080"
     volumes:
       - ./client:/app
     stdin_open: true
@@ -20,3 +22,19 @@ services:
       - ./server:/app
     stdin_open: true
     tty: true
+
+  database:
+    image: postgres:16
+    container_name: daurnchess-db
+    restart: always
+    environment:
+      POSTGRES_USER: daurn
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: daurnchess
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data:

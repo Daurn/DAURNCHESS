@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+  binaryTargets = ["native", "linux-musl", "linux-musl-openssl-3.0.x"]
+}
+
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int           @id @default(autoincrement())
+  username    String        @unique
+  email       String        @unique
+  password    String
+  elo_rating  Int           @default(1200)
+  created_at  DateTime      @default(now())
+  games_white Games[]       @relation("WhiteUser")
+  games_black Games[]       @relation("BlackUser")
+  messages    ChatMessage[]
+  wonGames    Games[]       @relation("WinnerRelation")
+}
+
+model Games {
+  id            Int           @id @default(autoincrement())
+  white_user    User          @relation("WhiteUser", fields: [white_user_id], references: [id])
+  white_user_id Int
+  black_user    User          @relation("BlackUser", fields: [black_user_id], references: [id])
+  black_user_id Int
+  winner_id     Int?
+  winner        User?         @relation("WinnerRelation", fields: [winner_id], references: [id])
+  status        String        @default("pending")
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @updatedAt
+  moves         Move[]
+  messages      ChatMessage[]
+}
+
+model Move {
+  id          Int      @id @default(autoincrement())
+  game        Games    @relation(fields: [game_id], references: [id], onDelete: Cascade)
+  game_id     Int
+  move_number Int
+  from_square String
+  to_square   String
+  piece       String
+  promotion   String?
+  fen_before  String
+  created_at  DateTime @default(now())
+}
+
+model ChatMessage {
+  id         Int      @id @default(autoincrement())
+  game       Games    @relation(fields: [game_id], references: [id], onDelete: Cascade)
+  game_id    Int
+  user       User     @relation(fields: [user_id], references: [id])
+  user_id    Int
+  message    String
+  created_at DateTime @default(now())
+}

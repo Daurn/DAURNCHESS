@@ -4,6 +4,7 @@ import History from "./pages/History";
 import Matchmaking from "./pages/Matchmaking";
 import ChessGame from "./pages/ChessGame";
 import Index from "./pages/Index";
+import SignIn from "./pages/SignIn";
 
 import "./App.css";
 
@@ -12,6 +13,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Login />} />
+        <Route path="/signin" element={<SignIn />} />
         <Route path="/index" element={<Index />} />
         <Route path="/history" element={<History />} />
         <Route path="/matchmaking" element={<Matchmaking />} />

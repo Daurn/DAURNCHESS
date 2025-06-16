@@ -12,7 +12,7 @@ COPY server/package.json server/pnpm-lock.yaml ./
 RUN npm install -g pnpm && pnpm install
 
 # Copier le reste du code (une fois les deps installées)
-COPY server .
+COPY server /
 
 # Exposer le port (exemple)
 EXPOSE 3000
