@@ -1,9 +1,9 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Login from "./pages/Login";
+import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
+import ChessGame from "./components/ChessGame";
+import Index from "./components/Home";
+import Login from "./components/Login";
 import History from "./pages/History";
 import Matchmaking from "./pages/Matchmaking";
-import ChessGame from "./pages/ChessGame";
-import Index from "./pages/Index";
 import SignIn from "./pages/SignIn";
 
 import "./App.css";
