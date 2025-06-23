@@ -1,45 +1,37 @@
+import { Button } from "@mui/material";
+import { Chess } from "chess.js";
 import { useState } from "react";
 import { Chessboard } from "react-chessboard";
-import { Chess } from "chess.js";
-import { Button } from "@mui/material";
+import type { ChessMove } from "../../types";
 
-const ChessGame = () => {
+export const ChessGame = () => {
   const [game, setGame] = useState(new Chess());
   const [fen, setFen] = useState(game.fen());
   const [gameOver, setGameOver] = useState(false);
   const [result, setResult] = useState("");
 
-  const onDrop = (
-    sourceSquare: string,
-    targetSquare: string,
-    targetPromotion: string
-  ) => {
-    const move = game.move({
+  const makeMove = (move: ChessMove) => {
+    const gameCopy = new Chess(game.fen());
+    try {
+      const result = gameCopy.move(move);
+      if (result) {
+        setGame(gameCopy);
+        return true;
+      }
+    } catch (error) {
+      console.error("Error making move:", error);
+      return false;
+    }
+    return false;
+  };
+
+  const onDrop = (sourceSquare: string, targetSquare: string) => {
+    const move: ChessMove = {
       from: sourceSquare,
       to: targetSquare,
-      promotion: targetPromotion.slice(1, 2).toLowerCase(), // promote to a piece
-    });
-
-    if (move === null) return false; // illegal move
-
-    setFen(game.fen());
-    setGame(game);
-
-    if (game.isGameOver()) {
-      if (game.isCheckmate()) {
-        const winner = game.turn() === "w" ? "Black" : "White";
-        setResult(`Checkmate, ${winner} win the game.`);
-      } else if (game.isStalemate()) {
-        setResult("Pat.");
-      } else if (game.isDraw()) {
-        setResult("Draw.");
-      } else {
-        setResult("Game over.");
-      }
-      setGameOver(true);
-    }
-
-    return true;
+      promotion: "q",
+    };
+    return makeMove(move);
   };
 
   return (
@@ -78,5 +70,3 @@ const ChessGame = () => {
     </div>
   );
 };
-
-export default ChessGame;
