@@ -8,7 +8,7 @@ import { Matchmaking } from "./pages/Matchmaking";
 
 import "./App.css";
 
-export const App = () => {
+const App = () => {
   return (
     <Router>
       <Routes>
@@ -22,3 +22,5 @@ export const App = () => {
     </Router>
   );
 };
+
+export default App;

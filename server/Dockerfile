@@ -1,21 +1,19 @@
-# Dockerfile
+FROM node:18-bullseye-slim
 
-FROM node:18-alpine
-
-# Définir le répertoire de travail
 WORKDIR /app
 
-# Copier uniquement les fichiers nécessaires pour installer les deps
+RUN npm install -g pnpm
+
 COPY server/package.json server/pnpm-lock.yaml ./
 
-# Installer pnpm et les dépendances
-RUN npm install -g pnpm && pnpm install
+RUN pnpm install
 
-# Copier le reste du code (une fois les deps installées)
-COPY server /
+COPY server/prisma/ ./prisma/
 
-# Exposer le port (exemple)
+RUN pnpm prisma generate
+
+COPY server/ .
+
 EXPOSE 3000
 
-# Lancer le serveur (ajuste selon ton entry point)
-CMD ["pnpm", "dev"]
+CMD ["sh", "-c", "pnpm prisma migrate deploy && pnpm run dev"]

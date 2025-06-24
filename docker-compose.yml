@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   client:
     build:
@@ -9,8 +7,11 @@ services:
       - "8080:8080"
     volumes:
       - ./client:/app
+      - /app/node_modules
     stdin_open: true
     tty: true
+    env_file:
+      - .env
 
   server:
     build:
@@ -19,9 +20,14 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./server:/app
+      - ./server/src:/app/src
+      - ./server/prisma:/app/prisma
     stdin_open: true
     tty: true
+    depends_on:
+      - database
+    env_file:
+      - .env
 
   database:
     image: postgres:16
