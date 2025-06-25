@@ -1,12 +1,7 @@
+import { Game, History, Home, Matchmaking, NotFound } from "@/pages";
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
-import { Login } from "./components/auth/login";
-import { SignIn } from "./components/auth/sign-in";
-import { ThemeProvider } from "./components/ui/theme-provider";
-import { Game } from "./pages/Game";
-import { History } from "./pages/History";
-import { Home } from "./pages/Home";
-import { Matchmaking } from "./pages/Matchmaking";
-import { NotFound } from "./pages/NotFound";
+import { Login, SignIn } from "./components/auth";
+import { ThemeProvider } from "./components/ui";
 
 import "./App.css";
 

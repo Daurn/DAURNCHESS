@@ -7,10 +7,22 @@ import {
 import { useTheme } from "@/components/ui/theme-provider";
 import { Toggle } from "@/components/ui/toggle";
 import { Moon, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function Navbar() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    setIsAuthenticated(!!localStorage.getItem("token"));
+    // Pour réagir à un éventuel changement de token dans d'autres onglets
+    const onStorage = () => setIsAuthenticated(!!localStorage.getItem("token"));
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem("token");
+    setIsAuthenticated(false);
     window.location.href = "/";
   };
 
@@ -35,14 +47,29 @@ export default function Navbar() {
               <a href="/matchmaking">Matchmaking</a>
             </NavigationMenuLink>
           </NavigationMenuItem>
-          <NavigationMenuItem>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium hover:bg-accent rounded-md"
-            >
-              Déconnexion
-            </button>
-          </NavigationMenuItem>
+          {isAuthenticated ? (
+            <NavigationMenuItem>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 text-sm font-medium hover:bg-accent rounded-md"
+              >
+                Déconnexion
+              </button>
+            </NavigationMenuItem>
+          ) : (
+            <>
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild>
+                  <a href="/login">Connexion</a>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild>
+                  <a href="/signin">Créer un compte</a>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+            </>
+          )}
         </NavigationMenuList>
       </NavigationMenu>
       <Toggle
