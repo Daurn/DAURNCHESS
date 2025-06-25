@@ -1,45 +1,60 @@
+import { PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/prisma";
 
 const prisma = new PrismaClient();
 
 export const createGame = async (req: Request, res: Response) => {
   try {
-    const { white_user_id, black_user_id } = req.body;
+    const { whiteId, blackId } = req.body;
 
-    const newGame = await prisma.games.create({
+    const game = await prisma.game.create({
       data: {
-        white_user_id,
-        black_user_id,
+        whiteId,
+        blackId,
+        status: "WAITING",
+        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        moves: [],
       },
     });
 
-    res.status(201).json(newGame);
+    return res.status(201).json(game);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erreur lors de la création de la partie" });
+    console.error("Create game error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+    });
   }
 };
 
-export const getGame = async (req: Request, res: Response) => {
-  const { gameId } = req.params;
+export const getGame = async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const game = await prisma.games.findUnique({
-      where: { id: Number(gameId) },
+    const { id } = req.params;
+
+    const game = await prisma.game.findUnique({
+      where: { id },
       include: {
-        white_user: true,
-        black_user: true,
-        moves: true,
+        white: { select: { username: true } },
+        black: { select: { username: true } },
+        winner: { select: { username: true } },
+        messages: true,
       },
     });
 
-    if (!game) return res.status(404).json({ error: "Partie non trouvée" });
+    if (!game) {
+      return res.status(404).json({
+        status: "error",
+        message: "Game not found",
+      });
+    }
 
-    res.status(200).json(game);
+    return res.status(200).json(game);
   } catch (error) {
-    res
-      .status(500)
-      .json({ error: "Erreur lors de la récupération de la partie" });
+    console.error("Get game error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+    });
   }
 };
 
@@ -61,31 +76,42 @@ export const getGames = async (req: Request, res: Response) => {
   }
 };
 
-export const playMove = async (req: Request, res: Response) => {
-  const { gameId } = req.params;
-  const { from_square, to_square, piece, promotion, fen_before } = req.body;
-
+export const playMove = async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const moveCount = await prisma.move.count({
-      where: { game_id: Number(gameId) },
-    });
+    const { id } = req.params;
+    const { from, to, promotion } = req.body;
 
-    const move = await prisma.move.create({
+    const game = await prisma.game.findUnique({ where: { id } });
+    if (!game) {
+      return res.status(404).json({
+        status: "error",
+        message: "Game not found",
+      });
+    }
+    if (game.status !== "PLAYING") {
+      return res.status(400).json({
+        status: "error",
+        message: "Game is not in playing state",
+      });
+    }
+
+    // Ici, il faudrait valider le coup avec une lib d'échecs (TODO)
+    const moveStr = `${from}${to}${promotion || ""}`;
+    const updatedGame = await prisma.game.update({
+      where: { id },
       data: {
-        game_id: Number(gameId),
-        from_square,
-        to_square,
-        piece,
-        promotion,
-        fen_before,
-        move_number: moveCount + 1,
+        moves: [...game.moves, moveStr],
+        // TODO: mettre à jour le FEN et le statut si besoin
       },
     });
 
-    res.status(201).json(move);
+    return res.status(200).json(updatedGame);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erreur lors de l'ajout du coup" });
+    console.error("Play move error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Internal server error",
+    });
   }
 };
 

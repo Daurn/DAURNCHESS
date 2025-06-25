@@ -1,17 +1,18 @@
 import { Router } from "express";
 import {
   createGame,
-  getGame,
+  getGameHistory,
   getGames,
   playMove,
-  getGameHistory,
 } from "../controllers/gameController";
+import { validateRequest } from "../middleware/validateRequest";
+import { createGameSchema, moveSchema } from "../validators/game";
 
 const router = Router();
 
-router.post("/", createGame); // POST /games
-router.get("/games", getGames); // GET /games/games
-router.post("/:gameId/move", playMove); // POST /games/:gameId/move
+router.post("/", validateRequest(createGameSchema), createGame); // POST /games
+router.get("/", getGames); // GET /games/
+router.post("/:id/move", validateRequest(moveSchema), playMove); // POST /games/:gameId/move
 router.get("/:gameId/history", getGameHistory); // GET /games/:gameId/history
 
 export default router;
