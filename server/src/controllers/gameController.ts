@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
+import { getStockfishMove } from "../services/stockfishService";
 
 const prisma = new PrismaClient();
 
@@ -60,14 +61,12 @@ export const getGame = async (req: Request<{ id: string }>, res: Response) => {
 
 export const getGames = async (req: Request, res: Response) => {
   try {
-    const games = await prisma.games.findMany({
+    const games = await prisma.game.findMany({
       include: {
-        white_user: true,
-        black_user: true,
-        moves: true,
+        white: true,
+        black: true,
       },
     });
-
     res.status(200).json(games);
   } catch (error) {
     res
@@ -118,4 +117,65 @@ export const playMove = async (req: Request<{ id: string }>, res: Response) => {
 export const getGameHistory = (req: Request, res: Response) => {
   const { gameId } = req.params;
   res.status(200).json({ gameId, history: ["move1", "move2"] });
+};
+
+export const playVsRobot = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { elo = 1500 } = req.body;
+    const game = await prisma.game.findUnique({ where: { id } });
+    if (!game) {
+      return res
+        .status(404)
+        .json({ status: "error", message: "Game not found" });
+    }
+    if (game.status !== "PLAYING") {
+      return res
+        .status(400)
+        .json({ status: "error", message: "Game is not in playing state" });
+    }
+    // Le robot joue le coup (on suppose qu'il est noir si c'est à lui de jouer)
+    const bestMove = await getStockfishMove(game.fen, { elo });
+    // Appliquer le coup au format UCI (ex: e2e4)
+    const moveStr = bestMove;
+    const updatedMoves = [...game.moves, moveStr];
+    // TODO: mettre à jour le FEN après le coup (utiliser une lib JS si besoin)
+    const updatedGame = await prisma.game.update({
+      where: { id },
+      data: {
+        moves: updatedMoves,
+        // fen: newFen, // À calculer si possible
+      },
+    });
+    return res.status(200).json({ move: moveStr, game: updatedGame });
+  } catch (error) {
+    console.error("Play vs robot error:", error);
+    return res
+      .status(500)
+      .json({ status: "error", message: "Internal server error" });
+  }
+};
+
+export const updateGameStatus = async (
+  req: Request<{ id: string }>,
+  res: Response
+) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!status) {
+      return res
+        .status(400)
+        .json({ status: "error", message: "Missing status" });
+    }
+    const game = await prisma.game.update({
+      where: { id },
+      data: { status },
+    });
+    return res.status(200).json(game);
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ status: "error", message: "Internal server error" });
+  }
 };

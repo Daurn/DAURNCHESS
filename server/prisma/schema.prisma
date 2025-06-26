@@ -28,18 +28,19 @@ model User {
 
 model Game {
   id        String     @id @default(uuid())
-  whiteId   String     @map("white_id")
-  blackId   String     @map("black_id")
+  whiteId   String?    @map("white_id")
+  blackId   String?    @map("black_id")
   winnerId  String?    @map("winner_id")
   status    GameStatus @default(WAITING)
   fen       String     @default("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
   moves     String[]   @default([])
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
+  isBotGame Boolean    @default(false)
 
   // Relations
-  white    User          @relation("WhitePlayer", fields: [whiteId], references: [id])
-  black    User          @relation("BlackPlayer", fields: [blackId], references: [id])
+  white    User?         @relation("WhitePlayer", fields: [whiteId], references: [id])
+  black    User?         @relation("BlackPlayer", fields: [blackId], references: [id])
   winner   User?         @relation("Winner", fields: [winnerId], references: [id])
   messages ChatMessage[]
 

@@ -32,6 +32,6 @@ export type GameResult = {
 };
 
 export type MatchmakingStatus = {
-  status: "searching" | "found" | "cancelled";
+  status: "searching" | "found" | "cancelled" | "error";
   gameId?: string;
 };

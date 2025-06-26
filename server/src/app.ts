@@ -7,6 +7,7 @@ import { env } from "./config/env";
 import authRoutes from "./routes/authRoutes";
 import gameRoutes from "./routes/gameRoutes";
 import userRoutes from "./routes/userRoutes";
+import stockfishRoutes from "./routes/stockfishRoutes";
 
 const app = express();
 
@@ -31,5 +32,6 @@ app.get("/api", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/games", gameRoutes);
+app.use("/api/stockfish", stockfishRoutes);
 
 export default app;

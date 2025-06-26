@@ -1,5 +1,5 @@
 import { Chess } from "chess.js";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Chessboard } from "react-chessboard";
 import { cn } from "../../lib/utils";
 import type { ChessMove } from "../../types";
@@ -7,19 +7,39 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Separator } from "../ui/separator";
 
-export const ChessGame = () => {
+type Props = {
+  elo: string;
+  initialColor: string;
+  gameId?: string;
+};
+
+export const ChessGame = ({ elo, initialColor, gameId }: Props) => {
   const [game, setGame] = useState(new Chess());
-  const [fen, setFen] = useState(game.fen());
+  const [fen, setFen] = useState("start");
   const [gameOver, setGameOver] = useState(false);
   const [result, setResult] = useState("");
   const [isChatVisible, setIsChatVisible] = useState(true);
   const [boardWidth, setBoardWidth] = useState(700);
   const boardContainerRef = useRef<HTMLDivElement>(null);
+  const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fonction pour autoriser le drag uniquement sur les pièces du joueur
+  const isDraggablePiece = ({ piece }: { piece: string }) => {
+    if (isLoading || gameOver) return false;
+    if (!piece) return false;
+    const isPlayerTurn =
+      (playerColor === "white" && game.turn() === "w") ||
+      (playerColor === "black" && game.turn() === "b");
+    if (!isPlayerTurn) return false;
+    // Les pièces blanches commencent par 'w', les noires par 'b'
+    if (playerColor === "white") return piece.startsWith("w");
+    return piece.startsWith("b");
+  };
 
   useEffect(() => {
     const updateBoardWidth = () => {
       if (boardContainerRef.current) {
-        // On laisse un peu de marge pour le padding
         setBoardWidth(Math.min(boardContainerRef.current.offsetWidth, 700));
       }
     };
@@ -38,33 +58,77 @@ export const ChessGame = () => {
     };
   }, [isChatVisible]);
 
-  const makeMove = (move: ChessMove) => {
-    const gameCopy = new Chess(game.fen());
+  const loadGame = useCallback(async () => {
+    if (!gameId) return;
+    setIsLoading(true);
     try {
-      const result = gameCopy.move(move);
-      if (result) {
-        setGame(gameCopy);
-        setFen(gameCopy.fen());
-        if (gameCopy.isGameOver()) {
+      const res = await fetch(`/api/stockfish/${gameId}`);
+      if (!res.ok) throw new Error("Partie non trouvée");
+      const data = await res.json();
+      const gameCopy = new Chess(data.fen);
+      setGame(gameCopy);
+      setFen(data.fen);
+      setPlayerColor(data.playerColor);
+
+      if (
+        (data.playerColor === "white" && gameCopy.turn() === "b") ||
+        (data.playerColor === "black" && gameCopy.turn() === "w")
+      ) {
+        // on assume que le back a déjà fait jouer le bot si nécessaire
+        // ou on pourrait appeler une route pour le faire jouer
+      }
+    } catch (e) {
+      console.error("Erreur chargement partie:", e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [gameId]);
+
+  useEffect(() => {
+    loadGame();
+  }, [loadGame]);
+
+  const makeMove = async (move: ChessMove, previousFen: string) => {
+    if (gameOver || !gameId) return;
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(`/api/stockfish/${gameId}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ move }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFen(data.fen);
+        const updatedGame = new Chess(data.fen);
+        setGame(updatedGame);
+        if (updatedGame.isGameOver()) {
           setGameOver(true);
-          // TODO: Determine the game result message
-          if (gameCopy.isCheckmate()) {
+          if (updatedGame.isCheckmate()) {
             setResult(
-              `Checkmate! ${gameCopy.turn() === "w" ? "Black" : "White"} wins.`
+              `Mat ! ${
+                updatedGame.turn() === "w" ? "Les noirs" : "Les blancs"
+              } gagnent.`
             );
-          } else if (gameCopy.isDraw()) {
-            setResult("Draw!");
+          } else if (updatedGame.isDraw()) {
+            setResult("Match nul !");
           } else {
-            setResult("Game over");
+            setResult("Partie terminée");
           }
         }
-        return true;
+      } else {
+        throw new Error(data.error || "Coup invalide");
       }
-    } catch (error) {
-      console.error("Error making move:", error);
-      return false;
+    } catch (e) {
+      console.error("Erreur lors du coup, annulation:", e);
+      // Rollback to the state before the optimistic update
+      setFen(previousFen);
+      setGame(new Chess(previousFen));
+    } finally {
+      setIsLoading(false);
     }
-    return false;
   };
 
   const onDrop = (sourceSquare: string, targetSquare: string) => {
@@ -73,15 +137,23 @@ export const ChessGame = () => {
       to: targetSquare,
       promotion: "q",
     };
-    return makeMove(move);
+
+    const gameCopy = new Chess(fen);
+    if (gameCopy.move(move) === null) {
+      return false; // illegal move
+    }
+
+    const previousFen = fen;
+    setFen(gameCopy.fen()); // optimistic update
+    setGame(gameCopy);
+
+    makeMove(move, previousFen);
+
+    return true;
   };
 
   const resetGame = () => {
-    const newGame = new Chess();
-    setGame(newGame);
-    setFen(newGame.fen());
-    setGameOver(false);
-    setResult("");
+    console.log("Fonctionnalité de réinitialisation à implémenter.");
   };
 
   return (
@@ -92,6 +164,13 @@ export const ChessGame = () => {
           isChatVisible ? "mr-8" : "items-start justify-center mr-0"
         )}
       >
+        <Card className="mb-4">
+          <CardContent className="p-2 text-sm text-muted-foreground">
+            <div>Elo du robot : {elo}</div>
+            <div>Couleur choisie : {initialColor}</div>
+            <div>Votre couleur : {playerColor}</div>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="p-6 flex items-center justify-center">
             <div
@@ -102,6 +181,8 @@ export const ChessGame = () => {
                 position={fen}
                 onPieceDrop={onDrop}
                 boardWidth={boardWidth}
+                boardOrientation={playerColor}
+                isDraggablePiece={isDraggablePiece}
               />
             </div>
           </CardContent>
@@ -113,7 +194,9 @@ export const ChessGame = () => {
             </CardContent>
           </Card>
         )}
-        <Button onClick={resetGame}>Nouvelle Partie</Button>
+        <Button onClick={resetGame} disabled>
+          Nouvelle Partie
+        </Button>
       </div>
 
       <div

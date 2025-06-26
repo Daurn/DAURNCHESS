@@ -22,18 +22,40 @@ export const Matchmaking = () => {
   const [selectedColor, setSelectedColor] = useState<string>("random");
   const navigate = useNavigate();
 
-  const handleStartSearch = () => {
+  const handleStartSearch = async () => {
     setIsSearching(true);
     setStatus({ status: "searching" });
-    // Simuler une recherche de partie
-    setTimeout(() => {
-      setIsSearching(false);
-      const gameId = "1";
+    sessionStorage.setItem("matchmaking-elo", selectedElo);
+    sessionStorage.setItem("matchmaking-color", selectedColor);
+
+    try {
+      const response = await fetch("/api/stockfish/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          playerColor: selectedColor,
+          elo: Number(selectedElo),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("La création de la partie a échoué.");
+      }
+
+      const gameData = await response.json();
+      const { gameId } = gameData;
+
       setStatus({ status: "found", gameId });
       sessionStorage.setItem("canAccessGame-" + gameId, "true");
-      // Pour la suite : transmettre selectedElo et selectedColor à la création de partie contre Stockfish
-      navigate("/game/" + gameId);
-    }, 2000);
+      navigate(`/game/${gameId}`);
+    } catch (error) {
+      console.error(error);
+      setStatus({ status: "error" });
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (
@@ -90,12 +112,19 @@ export const Matchmaking = () => {
                     Rechercher une partie
                   </Button>
                   <p className="text-sm text-muted-foreground mt-2 text-center">
-                    Statut :{" "}
-                    {status.status === "searching" && !status.gameId
-                      ? "En attente"
-                      : status.status === "found"
-                      ? `Partie trouvée (ID: ${status.gameId})`
-                      : "Annulé"}
+                    Statut:{" "}
+                    {(() => {
+                      switch (status.status) {
+                        case "searching":
+                          return "En attente";
+                        case "found":
+                          return `Partie trouvée (ID: ${status.gameId})`;
+                        case "error":
+                          return "Erreur lors de la création de la partie.";
+                        default:
+                          return "Annulé";
+                      }
+                    })()}
                   </p>
                 </>
               ) : (
@@ -103,12 +132,19 @@ export const Matchmaking = () => {
                   <Skeleton className="h-8 w-8 mx-auto rounded-full" />
                   <p className="mt-4">Recherche en cours...</p>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Statut :{" "}
-                    {status.status === "searching" && !status.gameId
-                      ? "En attente"
-                      : status.status === "found"
-                      ? `Partie trouvée (ID: ${status.gameId})`
-                      : "Annulé"}
+                    Statut:{" "}
+                    {(() => {
+                      switch (status.status) {
+                        case "searching":
+                          return "Recherche en cours...";
+                        case "found":
+                          return `Partie trouvée (ID: ${status.gameId})`;
+                        case "error":
+                          return "Erreur lors de la création de la partie.";
+                        default:
+                          return "Annulé";
+                      }
+                    })()}
                   </p>
                 </div>
               )}
