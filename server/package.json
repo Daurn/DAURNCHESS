@@ -4,13 +4,14 @@
   "description": "DAURNCHESS server",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "prisma generate && ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "ts-node-dev --require dotenv/config --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "jest",
     "prisma:generate": "prisma generate",
+    "migrate": "npx dotenv-cli -e .env -- prisma migrate deploy",
     "prisma:migrate": "prisma migrate deploy"
   },
   "keywords": [],

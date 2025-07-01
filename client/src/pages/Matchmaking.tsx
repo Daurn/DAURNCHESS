@@ -8,17 +8,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/context/auth-provider";
 import { useMatchmakingController } from "@/hooks/use-matchmaking-controller";
 import Navbar from "../components/layout/navbar";
 
 export const Matchmaking = () => {
+  const { user } = useAuth();
   const {
     status,
     isSearching,
     selectedElo,
     setSelectedElo,
-    selectedColor,
-    setSelectedColor,
+    displayedColor,
+    setColor,
     handleStartSearch,
   } = useMatchmakingController();
 
@@ -55,10 +57,7 @@ export const Matchmaking = () => {
                   <label className="block mb-1 text-sm font-medium">
                     Couleur
                   </label>
-                  <Select
-                    value={selectedColor}
-                    onValueChange={setSelectedColor}
-                  >
+                  <Select value={displayedColor} onValueChange={setColor}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Choisir la couleur" />
                     </SelectTrigger>
@@ -72,7 +71,11 @@ export const Matchmaking = () => {
               </div>
               {!isSearching ? (
                 <>
-                  <Button onClick={handleStartSearch} className="w-full">
+                  <Button
+                    onClick={() => handleStartSearch(user)}
+                    className="w-full"
+                    disabled={!user}
+                  >
                     Rechercher une partie
                   </Button>
                   <p className="text-sm text-muted-foreground mt-2 text-center">

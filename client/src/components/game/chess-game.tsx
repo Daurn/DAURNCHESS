@@ -1,14 +1,19 @@
+import { useAuth } from "@/context/auth-provider";
+import type { Move } from "@/types/game";
 import { Chessboard } from "react-chessboard";
-import type { UseChessGameControllerProps } from "../../hooks/use-chess-game-controller";
 import { useChessGameController } from "../../hooks/use-chess-game-controller";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Separator } from "../ui/separator";
 
-type Props = UseChessGameControllerProps;
+type Props = {
+  gameId?: string;
+};
 
-export const ChessGame = ({ elo, initialColor, gameId }: Props) => {
+export const ChessGame = ({ gameId }: Props) => {
+  const { user, isLoading: isAuthLoading } = useAuth();
+
   const {
     fen,
     gameOver,
@@ -17,11 +22,17 @@ export const ChessGame = ({ elo, initialColor, gameId }: Props) => {
     setIsChatVisible,
     boardWidth,
     boardContainerRef,
-    playerColor,
     isDraggablePiece,
     onDrop,
     resetGame,
-  } = useChessGameController({ elo, initialColor, gameId });
+    playerColor,
+    adversaireElo,
+    moves,
+  } = useChessGameController({ gameId, userId: user?.id });
+
+  if (isAuthLoading) {
+    return <div>Chargement de l'utilisateur...</div>;
+  }
 
   return (
     <div className="flex h-screen p-4 gap-4 box-border">
@@ -33,20 +44,22 @@ export const ChessGame = ({ elo, initialColor, gameId }: Props) => {
       >
         <Card className="mb-4">
           <CardContent className="p-2 text-sm text-muted-foreground">
-            <div>Elo du robot : {elo}</div>
-            <div>Couleur choisie : {initialColor}</div>
-            <div>Votre couleur : {playerColor}</div>
+            <div>Elo du robot : {adversaireElo ?? "?"}</div>
+            <div>Couleur choisie : {playerColor}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6 flex items-center justify-center">
             <div
               ref={boardContainerRef}
-              className="w-full flex justify-center items-center"
+              className="w-[700px] max-w-full flex justify-center items-center"
             >
               <Chessboard
                 position={fen}
-                onPieceDrop={onDrop}
+                onPieceDrop={(source, target) => {
+                  onDrop(source, target);
+                  return true;
+                }}
                 boardWidth={boardWidth}
                 boardOrientation={playerColor}
                 isDraggablePiece={isDraggablePiece}
@@ -74,10 +87,27 @@ export const ChessGame = ({ elo, initialColor, gameId }: Props) => {
       >
         <Card className={cn("flex flex-col", !isChatVisible && "invisible")}>
           <CardHeader>
-            <CardTitle>Informations</CardTitle>
+            <CardTitle>Historique des coups</CardTitle>
           </CardHeader>
           <CardContent className="flex-grow">
-            <p>Ici : timer, joueur, score, etc.</p>
+            <div className="mb-4">
+              <ol className="list-decimal pl-4 space-y-1">
+                {moves.length === 0 && (
+                  <li className="text-muted-foreground">Aucun coup joué</li>
+                )}
+                {moves.map((move: Move) => (
+                  <li key={move.id} className="flex items-center gap-2">
+                    <span className="font-mono">{move.number}.</span>
+                    <span className="font-semibold">{move.move}</span>
+                    {move.player?.username && (
+                      <span className="text-xs text-muted-foreground">
+                        ({move.player.username})
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
           </CardContent>
           <Separator />
           <div className="p-6">

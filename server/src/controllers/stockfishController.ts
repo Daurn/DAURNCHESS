@@ -66,6 +66,39 @@ export const playUserMove = async (req: Request, res: Response) => {
   }
 };
 
+export const playBotMove = async (req: Request, res: Response) => {
+  const { gameId } = req.params;
+  const game = games[gameId];
+  if (!game) return res.status(404).json({ error: "Partie non trouvée" });
+  try {
+    const chess = new Chess(game.fen);
+    if (chess.isGameOver()) {
+      return res.status(400).json({ error: "La partie est terminée" });
+    }
+    const botMoveUci = await getStockfishMove(game.fen, { elo: game.elo });
+    chess.move({
+      from: botMoveUci.slice(0, 2),
+      to: botMoveUci.slice(2, 4),
+      promotion: botMoveUci.slice(4),
+    });
+    game.fen = chess.fen();
+    game.moves.push(botMoveUci);
+    res.json({
+      fen: game.fen,
+      moves: game.moves,
+      gameOver: chess.isGameOver(),
+    });
+  } catch (e) {
+    res.status(500).json({
+      error: "Erreur lors du coup du bot",
+      details:
+        typeof e === "object" && e !== null && "message" in e
+          ? (e as any).message
+          : String(e),
+    });
+  }
+};
+
 export const getBotGame = (req: Request, res: Response) => {
   const { gameId } = req.params;
   const game = games[gameId];

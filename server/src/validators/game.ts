@@ -7,9 +7,19 @@ export const moveSchema = z.object({
 });
 
 export const createGameSchema = z.object({
-  whiteId: z.string(),
-  blackId: z.string(),
+  body: z.object({
+    whiteId: z.string().nullable(),
+    blackId: z.string().nullable(),
+    isBotGame: z.boolean().optional(),
+  }),
+});
+
+export const moveToGameSchema = z.object({
+  body: z.object({
+    move: z.string().min(1),
+    playerId: z.string().optional(),
+  }),
 });
 
 export type MoveInput = z.infer<typeof moveSchema>;
-export type CreateGameInput = z.infer<typeof createGameSchema>;
+export type CreateGameInput = z.infer<typeof createGameSchema>["body"];

@@ -13,9 +13,10 @@ export type AuthResponse = {
 };
 
 export type User = {
-  id: number;
+  id: string;
   username: string;
   email: string;
+  rating: number;
   createdAt: string;
   updatedAt: string;
 };

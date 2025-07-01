@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getBotGame,
+  playBotMove,
   playUserMove,
   startBotGame,
 } from "../controllers/stockfishController";
@@ -23,6 +24,8 @@ router.post("/bestmove", async (req, res) => {
 router.post("/start", startBotGame);
 // Jouer un coup utilisateur
 router.post("/:gameId/move", playUserMove);
+// Jouer un coup du bot (sans coup utilisateur)
+router.post("/:gameId/botmove", playBotMove);
 // Obtenir l'état courant
 router.get("/:gameId", getBotGame);
 

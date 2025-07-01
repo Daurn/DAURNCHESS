@@ -1,4 +1,5 @@
 import { useHistoryController } from "@/hooks/use-history-controller";
+import type { Game } from "@/types/game";
 import Navbar from "../components/layout/navbar";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -29,7 +30,37 @@ export const History = () => {
     setSelectedGame,
     drawerOpen,
     setDrawerOpen,
+    user,
   } = useHistoryController();
+
+  // Fonction utilitaire pour déterminer l'adversaire
+  const getOpponent = (game: Game) => {
+    if (game.isBotGame) return "Stockfish";
+    if (!user) return "?";
+    if (game.whiteId === user.id) return game.black?.username || "?";
+    if (game.blackId === user.id) return game.white?.username || "?";
+    return "?";
+  };
+
+  // Nouvelle fonction pour afficher l'Elo de l'adversaire
+  const getOpponentElo = (game: Game) => {
+    return game.elo ?? "?";
+  };
+
+  // Fonction utilitaire pour déterminer le résultat
+  const getResult = (game: Game) => {
+    if (!user) return "?";
+    if (game.status !== "FINISHED") return "En cours";
+    if (!game.winnerId) return "Nul";
+    if (game.winnerId === user.id) return "Gagné";
+    return "Perdu";
+  };
+
+  // Contrôle du temps (placeholder, à adapter si champs dédiés plus tard)
+  const getTimeControl = (game: Game) => {
+    // Si tu ajoutes un champ timeControl dans Game, adapte ici
+    return game.isBotGame ? "vs Bot" : "Classique";
+  };
 
   return (
     <>
@@ -51,9 +82,9 @@ export const History = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Adversaire</TableHead>
+                    <TableHead>Elo adversaire</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Résultat</TableHead>
-                    <TableHead>Contrôle du temps</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -66,17 +97,16 @@ export const History = () => {
                         setDrawerOpen(true);
                       }}
                     >
-                      <TableCell>{game.opponent}</TableCell>
+                      <TableCell>{getOpponent(game)}</TableCell>
+                      <TableCell>{getOpponentElo(game)}</TableCell>
                       <TableCell>
-                        {new Date(game.startTime).toLocaleDateString()} -{" "}
-                        {new Date(game.endTime).toLocaleDateString()}
+                        {new Date(game.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                          {game.result}
+                          {getResult(game)}
                         </span>
                       </TableCell>
-                      <TableCell>{game.timeControl}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -90,13 +120,35 @@ export const History = () => {
           <DrawerHeader>
             <DrawerTitle>Détail de la partie</DrawerTitle>
             <DrawerDescription>
-              Ceci est un panneau factice. Les détails de la partie sélectionnée
-              apparaîtront ici.
+              {selectedGame ? (
+                <>
+                  <div className="mb-2">
+                    Adversaire : {getOpponent(selectedGame)}
+                  </div>
+                  <div className="mb-2">
+                    Résultat : {getResult(selectedGame)}
+                  </div>
+                  <div className="mb-2">
+                    Début : {new Date(selectedGame.createdAt).toLocaleString()}
+                  </div>
+                  <div className="mb-2">
+                    Fin : {new Date(selectedGame.updatedAt).toLocaleString()}
+                  </div>
+                  <div className="mb-2">
+                    Contrôle du temps : {getTimeControl(selectedGame)}
+                  </div>
+                  <div className="mb-2">
+                    FEN final :{" "}
+                    <span className="break-all">{selectedGame.fen}</span>
+                  </div>
+                </>
+              ) : (
+                <>Aucune partie sélectionnée.</>
+              )}
             </DrawerDescription>
           </DrawerHeader>
           <div className="p-4 text-foreground">
-            {/* À remplacer par les vrais détails */}
-            <p>Contenu factice pour la partie : {selectedGame?.id}</p>
+            {/* On pourrait afficher ici la liste des coups, etc. */}
           </div>
           <DrawerFooter>
             <DrawerClose asChild>

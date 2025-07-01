@@ -22,6 +22,7 @@ model User {
   gamesAsBlack Game[]        @relation("BlackPlayer")
   wonGames     Game[]        @relation("Winner")
   messages     ChatMessage[]
+  Move         Move[]
 
   @@map("users")
 }
@@ -37,12 +38,14 @@ model Game {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
   isBotGame Boolean    @default(false)
+  elo       Int?
 
   // Relations
   white    User?         @relation("WhitePlayer", fields: [whiteId], references: [id])
   black    User?         @relation("BlackPlayer", fields: [blackId], references: [id])
   winner   User?         @relation("Winner", fields: [winnerId], references: [id])
   messages ChatMessage[]
+  Move     Move[]
 
   @@map("games")
 }
@@ -60,6 +63,21 @@ model ChatMessage {
   user User @relation(fields: [userId], references: [id])
 
   @@map("chat_messages")
+}
+
+model Move {
+  id        String   @id @default(uuid())
+  gameId    String   @map("game_id")
+  playerId  String?  @map("player_id")
+  move      String // Notation SAN ou UCI
+  number    Int // Numéro du coup (1, 2, 3, ...)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  game   Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  player User? @relation(fields: [playerId], references: [id])
+
+  @@map("moves")
 }
 
 enum GameStatus {

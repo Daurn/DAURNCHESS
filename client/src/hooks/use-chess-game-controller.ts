@@ -1,19 +1,17 @@
+import type { Move } from "@/types/game";
 import { Chess } from "chess.js";
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChessMove } from "../types/game";
+import { useEffect, useRef, useState } from "react";
+import { getGame, postGameMove } from "../services/api";
 
 export type UseChessGameControllerProps = {
-  elo: string;
-  initialColor: string;
   gameId?: string;
+  userId?: string;
 };
 
 export const useChessGameController = ({
-  elo,
-  initialColor,
   gameId,
+  userId,
 }: UseChessGameControllerProps) => {
-  const [game, setGame] = useState(new Chess());
   const [fen, setFen] = useState("start");
   const [gameOver, setGameOver] = useState(false);
   const [result, setResult] = useState("");
@@ -22,18 +20,37 @@ export const useChessGameController = ({
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
   const [isLoading, setIsLoading] = useState(true);
+  const [moves, setMoves] = useState<Move[]>([]);
+  const [adversaireElo, setAdversaireElo] = useState<number | null>(null);
 
-  // Fonction pour autoriser le drag uniquement sur les pièces du joueur
-  const isDraggablePiece = ({ piece }: { piece: string }) => {
-    if (isLoading || gameOver) return false;
-    if (!piece) return false;
-    const isPlayerTurn =
-      (playerColor === "white" && game.turn() === "w") ||
-      (playerColor === "black" && game.turn() === "b");
-    if (!isPlayerTurn) return false;
-    if (playerColor === "white") return piece.startsWith("w");
-    return piece.startsWith("b");
-  };
+  useEffect(() => {
+    if (!gameId || !userId) return;
+    let isMounted = true;
+    setIsLoading(true);
+    getGame(gameId)
+      .then((data) => {
+        if (!isMounted) return;
+        const color: "white" | "black" =
+          userId === data.whiteId ? "white" : "black";
+        setPlayerColor(color);
+        setFen(data.fen);
+        setMoves(data.moves);
+        setAdversaireElo(data.elo ?? null);
+        setGameOver(
+          data.status === "FINISHED" || new Chess(data.fen).isGameOver()
+        );
+        setResult("");
+      })
+      .catch((e) => {
+        console.error("Erreur chargement partie:", e);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoading(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [gameId, userId]);
 
   useEffect(() => {
     const updateBoardWidth = () => {
@@ -43,95 +60,70 @@ export const useChessGameController = ({
     };
     updateBoardWidth();
     const resizeObserver = new window.ResizeObserver(updateBoardWidth);
-    if (boardContainerRef.current) {
-      resizeObserver.observe(boardContainerRef.current);
-    }
+    const boardContainer = boardContainerRef.current;
+    if (boardContainer) resizeObserver.observe(boardContainer);
     window.addEventListener("resize", updateBoardWidth);
     return () => {
       window.removeEventListener("resize", updateBoardWidth);
-      if (boardContainerRef.current) {
-        resizeObserver.unobserve(boardContainerRef.current);
-      }
+      if (boardContainer) resizeObserver.unobserve(boardContainer);
       resizeObserver.disconnect();
     };
   }, [isChatVisible]);
 
-  const loadGame = useCallback(async () => {
-    if (!gameId) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/stockfish/${gameId}`);
-      if (!res.ok) throw new Error("Partie non trouvée");
-      const data = await res.json();
-      const gameCopy = new Chess(data.fen);
-      setGame(gameCopy);
-      setFen(data.fen);
-      setPlayerColor(data.playerColor);
-    } catch (e) {
-      console.error("Erreur chargement partie:", e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [gameId]);
-
   useEffect(() => {
-    loadGame();
-  }, [loadGame]);
-
-  const makeMove = async (move: ChessMove, previousFen: string) => {
-    if (gameOver || !gameId) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/stockfish/${gameId}/move`, {
+    if (gameOver || isLoading || !gameId) return;
+    const chess = new Chess(fen);
+    const isBotTurn =
+      (playerColor === "white" && chess.turn() === "b") ||
+      (playerColor === "black" && chess.turn() === "w");
+    if (isBotTurn) {
+      setIsLoading(true);
+      fetch(`/api/games/${gameId}/botmove`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ move }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setFen(data.fen);
-        const updatedGame = new Chess(data.fen);
-        setGame(updatedGame);
-        if (updatedGame.isGameOver()) {
-          setGameOver(true);
-          if (updatedGame.isCheckmate()) {
-            setResult(
-              `Mat ! ${
-                updatedGame.turn() === "w" ? "Les noirs" : "Les blancs"
-              } gagnent.`
-            );
-          } else if (updatedGame.isDraw()) {
-            setResult("Match nul !");
-          } else {
-            setResult("Partie terminée");
-          }
-        }
-      } else {
-        throw new Error(data.error || "Coup invalide");
-      }
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          setFen(data.fen);
+        })
+        .catch((e) => {
+          console.error("Erreur lors du coup du bot:", e);
+        })
+        .finally(() => setIsLoading(false));
+    }
+  }, [fen, playerColor, gameOver, isLoading, gameId]);
+
+  const isDraggablePiece = ({ piece }: { piece: string }) => {
+    if (isLoading || gameOver) return false;
+    const chess = new Chess(fen);
+    const isPlayerTurn =
+      (playerColor === "white" && chess.turn() === "w") ||
+      (playerColor === "black" && chess.turn() === "b");
+    return isPlayerTurn && piece.startsWith(playerColor[0]);
+  };
+
+  const onDrop = async (sourceSquare: string, targetSquare: string) => {
+    if (!gameId) return false;
+    const chess = new Chess(fen);
+    const move = chess.move({ from: sourceSquare, to: targetSquare });
+    if (!move) return false;
+    setFen(chess.fen());
+    setIsLoading(true);
+    try {
+      await postGameMove(gameId, move.san, userId);
+      const data = await getGame(gameId);
+      setMoves(data.moves);
+      setFen(data.fen);
+      setGameOver(
+        data.status === "FINISHED" || new Chess(data.fen).isGameOver()
+      );
     } catch (e) {
-      console.error("Erreur lors du coup, annulation:", e);
-      setFen(previousFen);
-      setGame(new Chess(previousFen));
+      console.error("Erreur lors de l'enregistrement du coup:", e);
+      setFen(fen);
+      return false;
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const onDrop = (sourceSquare: string, targetSquare: string) => {
-    const move: ChessMove = {
-      from: sourceSquare,
-      to: targetSquare,
-      promotion: "q",
-    };
-    const gameCopy = new Chess(fen);
-    if (gameCopy.move(move) === null) {
-      return false;
-    }
-    const previousFen = fen;
-    setFen(gameCopy.fen());
-    setGame(gameCopy);
-    makeMove(move, previousFen);
     return true;
   };
 
@@ -152,7 +144,7 @@ export const useChessGameController = ({
     isDraggablePiece,
     onDrop,
     resetGame,
-    elo,
-    initialColor,
+    adversaireElo,
+    moves,
   };
 };

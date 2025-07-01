@@ -35,3 +35,30 @@ export type MatchmakingStatus = {
   status: "searching" | "found" | "cancelled" | "error";
   gameId?: string;
 };
+
+export type Move = {
+  id: string;
+  gameId: string;
+  playerId?: string;
+  move: string;
+  number: number;
+  createdAt: string;
+  player?: { id: string; username: string };
+};
+
+export type Game = {
+  id: string;
+  whiteId: string;
+  blackId: string;
+  winnerId?: string;
+  status: "WAITING" | "PLAYING" | "FINISHED" | "ABANDONED";
+  fen: string;
+  moves: Move[];
+  createdAt: string;
+  updatedAt: string;
+  isBotGame: boolean;
+  white: { username: string; rating: number };
+  black: { username: string; rating: number };
+  winner?: { username: string };
+  elo?: number;
+};

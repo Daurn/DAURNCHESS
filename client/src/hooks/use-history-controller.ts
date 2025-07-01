@@ -1,56 +1,38 @@
+import { useAuth } from "@/context/auth-provider";
 import { useEffect, useState } from "react";
-import type { GameResult } from "../types/game";
+import type { Game } from "../types/game";
 
 export const useHistoryController = () => {
-  const [games, setGames] = useState<GameResult[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedGame, setSelectedGame] = useState<GameResult | null>(null);
+  const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { user } = useAuth?.() ?? { user: null };
 
   useEffect(() => {
     const fetchGames = async () => {
       setIsLoading(true);
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:3000/api/games", {
+        const res = await fetch("/api/games?status=FINISHED", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        let data = [];
+        let data: Game[] = [];
         try {
           data = await res.json();
         } catch {
           data = [];
         }
-        let sortedGames = Array.isArray(data)
+        const sortedGames = Array.isArray(data)
           ? data.sort(
-              (a: GameResult, b: GameResult) =>
-                new Date(b.endTime).getTime() - new Date(a.endTime).getTime()
+              (a, b) =>
+                new Date(b.updatedAt).getTime() -
+                new Date(a.updatedAt).getTime()
             )
           : [];
-        if (sortedGames.length === 0) {
-          sortedGames = [
-            {
-              id: 1,
-              opponent: "Magnus Carlsen",
-              startTime: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-              endTime: new Date(Date.now() - 3600 * 1000).toISOString(),
-              result: "Gagné",
-              timeControl: "10+0",
-            },
-          ];
-        }
         setGames(sortedGames);
       } catch {
-        setGames([
-          {
-            id: 1,
-            opponent: "Magnus Carlsen",
-            startTime: new Date(Date.now() - 3600 * 1000 * 2).toISOString(),
-            endTime: new Date(Date.now() - 3600 * 1000).toISOString(),
-            result: "Gagné",
-            timeControl: "10+0",
-          },
-        ]);
+        setGames([]);
       } finally {
         setIsLoading(false);
       }
@@ -65,5 +47,6 @@ export const useHistoryController = () => {
     setSelectedGame,
     drawerOpen,
     setDrawerOpen,
+    user,
   };
 };

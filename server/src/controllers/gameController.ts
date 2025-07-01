@@ -1,4 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import { GameStatus, PrismaClient } from "@prisma/client";
+import { Chess } from "chess.js";
 import { Request, Response } from "express";
 import { getStockfishMove } from "../services/stockfishService";
 
@@ -6,18 +7,29 @@ const prisma = new PrismaClient();
 
 export const createGame = async (req: Request, res: Response) => {
   try {
-    const { whiteId, blackId } = req.body;
-
+    const { whiteId, blackId, isBotGame, elo } = req.body;
+    let eloValue: number | null = null;
+    if (isBotGame) {
+      eloValue = typeof elo === "number" ? elo : 1500;
+    } else {
+      // On récupère le rating de l'adversaire (celui qui n'est pas le créateur)
+      // On suppose que le créateur est whiteId
+      const adversaireId = blackId;
+      const adversaire = await prisma.user.findUnique({
+        where: { id: adversaireId },
+      });
+      eloValue = adversaire?.rating ?? null;
+    }
     const game = await prisma.game.create({
       data: {
         whiteId,
         blackId,
+        isBotGame,
         status: "WAITING",
         fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        moves: [],
+        elo: eloValue,
       },
     });
-
     return res.status(201).json(game);
   } catch (error) {
     console.error("Create game error:", error);
@@ -28,7 +40,10 @@ export const createGame = async (req: Request, res: Response) => {
   }
 };
 
-export const getGame = async (req: Request<{ id: string }>, res: Response) => {
+export const getGameById = async (
+  req: Request<{ id: string }>,
+  res: Response
+) => {
   try {
     const { id } = req.params;
 
@@ -39,6 +54,11 @@ export const getGame = async (req: Request<{ id: string }>, res: Response) => {
         black: { select: { username: true } },
         winner: { select: { username: true } },
         messages: true,
+        Move: {
+          orderBy: {
+            number: "asc",
+          },
+        },
       },
     });
 
@@ -61,7 +81,10 @@ export const getGame = async (req: Request<{ id: string }>, res: Response) => {
 
 export const getGames = async (req: Request, res: Response) => {
   try {
+    const { status } = req.query;
+    const where = status ? { status: status as GameStatus } : undefined;
     const games = await prisma.game.findMany({
+      where,
       include: {
         white: true,
         black: true,
@@ -75,79 +98,61 @@ export const getGames = async (req: Request, res: Response) => {
   }
 };
 
-export const playMove = async (req: Request<{ id: string }>, res: Response) => {
+export const playVsRobot = async (
+  req: Request<{ gameId: string }>,
+  res: Response
+) => {
   try {
-    const { id } = req.params;
-    const { from, to, promotion } = req.body;
-
-    const game = await prisma.game.findUnique({ where: { id } });
-    if (!game) {
-      return res.status(404).json({
-        status: "error",
-        message: "Game not found",
-      });
-    }
-    if (game.status !== "PLAYING") {
-      return res.status(400).json({
-        status: "error",
-        message: "Game is not in playing state",
-      });
-    }
-
-    // Ici, il faudrait valider le coup avec une lib d'échecs (TODO)
-    const moveStr = `${from}${to}${promotion || ""}`;
-    const updatedGame = await prisma.game.update({
-      where: { id },
-      data: {
-        moves: [...game.moves, moveStr],
-        // TODO: mettre à jour le FEN et le statut si besoin
-      },
-    });
-
-    return res.status(200).json(updatedGame);
-  } catch (error) {
-    console.error("Play move error:", error);
-    return res.status(500).json({
-      status: "error",
-      message: "Internal server error",
-    });
-  }
-};
-
-export const getGameHistory = (req: Request, res: Response) => {
-  const { gameId } = req.params;
-  res.status(200).json({ gameId, history: ["move1", "move2"] });
-};
-
-export const playVsRobot = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
+    const { gameId } = req.params;
     const { elo = 1500 } = req.body;
-    const game = await prisma.game.findUnique({ where: { id } });
+    let game = await prisma.game.findUnique({ where: { id: gameId } });
     if (!game) {
       return res
         .status(404)
         .json({ status: "error", message: "Game not found" });
     }
-    if (game.status !== "PLAYING") {
+    if (game.status === "WAITING") {
+      game = await prisma.game.update({
+        where: { id: gameId },
+        data: { status: "PLAYING" },
+      });
+    } else if (game.status !== "PLAYING") {
       return res
         .status(400)
         .json({ status: "error", message: "Game is not in playing state" });
     }
-    // Le robot joue le coup (on suppose qu'il est noir si c'est à lui de jouer)
+    // Le robot joue le coup
     const bestMove = await getStockfishMove(game.fen, { elo });
-    // Appliquer le coup au format UCI (ex: e2e4)
-    const moveStr = bestMove;
-    const updatedMoves = [...game.moves, moveStr];
-    // TODO: mettre à jour le FEN après le coup (utiliser une lib JS si besoin)
-    const updatedGame = await prisma.game.update({
-      where: { id },
-      data: {
-        moves: updatedMoves,
-        // fen: newFen, // À calculer si possible
-      },
-    });
-    return res.status(200).json({ move: moveStr, game: updatedGame });
+
+    const chess = new Chess(game.fen);
+    const moveResult = chess.move(bestMove);
+
+    if (moveResult === null) {
+      return res.status(500).json({
+        status: "error",
+        message: "Stockfish a produit un coup invalide.",
+      });
+    }
+
+    const updatedFen = chess.fen();
+    const movesCount = await prisma.move.count({ where: { gameId: gameId } });
+
+    const [, newMove] = await prisma.$transaction([
+      prisma.game.update({
+        where: { id: gameId },
+        data: { fen: updatedFen },
+      }),
+      prisma.move.create({
+        data: {
+          gameId,
+          move: bestMove,
+          number: movesCount + 1,
+          // Le robot n'a pas de playerId pour l'instant
+        },
+      }),
+    ]);
+
+    return res.status(200).json({ fen: updatedFen, move: newMove });
   } catch (error) {
     console.error("Play vs robot error:", error);
     return res
@@ -162,20 +167,92 @@ export const updateGameStatus = async (
 ) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
-    if (!status) {
+    const { status, winnerId } = req.body;
+
+    if (!status && !winnerId) {
       return res
         .status(400)
-        .json({ status: "error", message: "Missing status" });
+        .json({ status: "error", message: "Missing status or winnerId" });
     }
+
+    const dataToUpdate: { status?: GameStatus; winnerId?: string } = {};
+    if (status) dataToUpdate.status = status;
+    if (winnerId) dataToUpdate.winnerId = winnerId;
+
     const game = await prisma.game.update({
       where: { id },
-      data: { status },
+      data: dataToUpdate,
     });
     return res.status(200).json(game);
   } catch (error) {
     return res
       .status(500)
       .json({ status: "error", message: "Internal server error" });
+  }
+};
+
+// Ajoute un coup à une partie
+export const addMoveToGame = async (
+  req: Request<{ gameId: string }, {}, { move: string; playerId?: string }>,
+  res: Response
+) => {
+  try {
+    const { gameId } = req.params;
+    const { move, playerId } = req.body;
+    if (!move) return res.status(400).json({ error: "Move requis" });
+
+    const game = await prisma.game.findUnique({ where: { id: gameId } });
+    if (!game) {
+      return res.status(404).json({ error: "Partie non trouvée" });
+    }
+
+    const chess = new Chess(game.fen);
+    const moveResult = chess.move(move);
+
+    if (moveResult === null) {
+      return res.status(400).json({ error: "Coup invalide" });
+    }
+
+    const movesCount = await prisma.move.count({ where: { gameId } });
+
+    const [, newMove] = await prisma.$transaction([
+      prisma.game.update({
+        where: { id: gameId },
+        data: { fen: chess.fen() },
+      }),
+      prisma.move.create({
+        data: {
+          gameId,
+          playerId,
+          move,
+          number: movesCount + 1,
+        },
+      }),
+    ]);
+
+    return res.status(201).json(newMove);
+  } catch (error) {
+    console.error("Erreur lors de l'ajout du coup:", error);
+    return res.status(500).json({ error: "Erreur lors de l'ajout du coup" });
+  }
+};
+
+// Récupère l'historique des coups d'une partie
+export const getMovesForGame = async (
+  req: Request<{ gameId: string }>,
+  res: Response
+) => {
+  try {
+    const { gameId } = req.params;
+    const moves = await prisma.move.findMany({
+      where: { gameId },
+      orderBy: { number: "asc" },
+      include: { player: { select: { id: true, username: true } } },
+    });
+    return res.status(200).json(moves);
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ error: "Erreur lors de la récupération des coups" });
   }
 };

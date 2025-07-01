@@ -1,7 +1,6 @@
 import { spawn } from "child_process";
 
 export type StockfishOptions = {
-  skillLevel?: number; // 0-20
   elo?: number; // 1350-2850
   movetime?: number; // ms
 };
@@ -15,11 +14,13 @@ export const getStockfishMove = async (
     let bestMove = "";
     let error = "";
 
-    const { skillLevel = 20, elo, movetime = 1000 } = options;
+    const { elo, movetime = 1000 } = options;
 
     stockfish.stdin.write("uci\n");
-    if (elo) stockfish.stdin.write(`setoption name UCI_Elo value ${elo}\n`);
-    stockfish.stdin.write(`setoption name Skill Level value ${skillLevel}\n`);
+    if (elo) {
+      stockfish.stdin.write("setoption name UCI_LimitStrength value true\n");
+      stockfish.stdin.write(`setoption name UCI_Elo value ${elo}\n`);
+    }
     stockfish.stdin.write(`position fen ${fen}\n`);
     stockfish.stdin.write(`go movetime ${movetime}\n`);
 
